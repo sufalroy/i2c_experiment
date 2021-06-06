@@ -8,8 +8,12 @@
 
 extern "C" {
 #include <i2c/smbus.h>
+#include <bluetooth/bluetooth.h>
+#include <bluetooth/hci.h>
+#include <bluetooth/hci_lib.h>
 }
 
+#include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -42,7 +46,7 @@ struct Linux_i2c
 	}
 
 	template<typename Iter>
-	void smbus_read_block(int device, std::uint8_t address, Iter buffer_begin, Iter buffer_end)
+	void smbus_read_block(int device, std::uint8_t address, Iter buffer_begin, Iter buffer_end) const
 	{
 		spdlog::warn("Read block data is not implemented, falling back to 1 byte at a time");
 		read_block_1_byte_at_a_time(device, address, buffer_begin, buffer_end);
@@ -58,7 +62,7 @@ struct Linux_i2c
 		return static_cast<std::uint8_t>(res);
 	}
 
-	auto read_byte(int device) -> std::uint8_t
+	auto read_byte(int device) const -> std::uint8_t
 	{
 		const auto res = i2c_smbus_read_byte(device);
 		if(res < 0)
@@ -69,7 +73,7 @@ struct Linux_i2c
 	}
 
 	template<typename Iter>
-	void i2c_read_block(int device, std::uint8_t address, Iter buffer_begin, Iter buffer_end)
+	void i2c_read_block(int device, std::uint8_t address, Iter buffer_begin, Iter buffer_end) const
 	{
 		const auto bytes_to_read = std::distance(buffer_begin, buffer_end);
 		if(bytes_to_read > I2C_SMBUS_BLOCK_MAX)
@@ -85,7 +89,7 @@ struct Linux_i2c
 	}
 
 	template<typename Iter>
-	void read_block_1_byte_at_a_time(int device, std::uint8_t starting_address, Iter buffer_begin, Iter buffer_end)
+	void read_block_1_byte_at_a_time(int device, std::uint8_t starting_address, Iter buffer_begin, Iter buffer_end) const
 	{
 		spdlog::trace("Reading {} bytes from {:02x} starting at {:02x}", std::distance(buffer_begin, buffer_end), device, starting_address);
 		for(auto address = starting_address; buffer_begin != buffer_end; ++address, ++buffer_begin)
@@ -179,12 +183,7 @@ struct i2c_device
 		return driver.read_byte(handle, reg);
 	}
 
-	[[nodiscard]] auto read_block(std::uint8_t reg) const
-	{
-		return driver.read_block(handle, reg);
-	}
-
-	void read_block(const std::uint8_t starting_address, std::uint8_t* begin_iterator, std::uint8_t* end_iterator)
+	void read_block(const std::uint8_t starting_address, std::uint8_t* begin_iterator, std::uint8_t* end_iterator) const
 	{
 		switch(read_mode)
 		{
@@ -248,68 +247,6 @@ constexpr auto MPU6050_PWR_MGMT_1     = 0x6B; // Primary power/sleep control reg
 constexpr auto MPU6050_PWR_MGMT_2     = 0x6C; // Secondary power/sleep control register
 constexpr auto MPU6050_WHO_AM_I       = 0x75; // Divice ID register
 
-typedef enum fsync_out
-{
-  MPU6050_FSYNC_OUT_DISABLED,
-  MPU6050_FSYNC_OUT_TEMP,
-  MPU6050_FSYNC_OUT_GYROX,
-  MPU6050_FSYNC_OUT_GYROY,
-  MPU6050_FSYNC_OUT_GYROZ,
-  MPU6050_FSYNC_OUT_ACCELX,
-  MPU6050_FSYNC_OUT_ACCELY,
-  MPU6050_FSYNC_OUT_ACCEL_Z,
-} mpu6050_fsync_out_t;
-
-
-typedef enum clock_select
-{
-  MPU6050_INTR_8MHz,
-  MPU6050_PLL_GYROX,
-  MPU6050_PLL_GYROY,
-  MPU6050_PLL_GYROZ,
-  MPU6050_PLL_EXT_32K,
-  MPU6050_PLL_EXT_19MHz,
-  MPU6050_STOP = 7,
-} mpu6050_clock_select_t;
-
-// Accelerometer Range.
-typedef enum
-{
-	MPU6050_RANGE_2_G  = 0b00,  //< +/- 2g (default value)
-	MPU6050_RANGE_4_G  = 0b01,  //< +/- 4g
-	MPU6050_RANGE_8_G  = 0b10,  //< +/- 8g
-	MPU6050_RANGE_16_G = 0b11,  //< +/- 16g
-} mpu6050_accel_range_t;
-
-// Gyroscope Range
-typedef enum
-{
-	MPU6050_RANGE_250_DEG,  //< +/- 250 deg/s (default value)
-	MPU6050_RANGE_500_DEG,  //< +/- 500 deg/s
-	MPU6050_RANGE_1000_DEG, //< +/- 1000 deg/s
-	MPU6050_RANGE_2000_DEG, //< +/- 2000 deg/s
-} mpu6050_gyro_range_t;
-
-// LPF Bandwidth
-typedef enum 
-{
-	MPU6050_BAND_260_HZ, ///< Docs imply this disables the filter
-	MPU6050_BAND_184_HZ, ///< 184 Hz
-	MPU6050_BAND_94_HZ,  ///< 94 Hz
-	MPU6050_BAND_44_HZ,  ///< 44 Hz
-	MPU6050_BAND_21_HZ,  ///< 21 Hz
-	MPU6050_BAND_10_HZ,  ///< 10 Hz
-	MPU6050_BAND_5_HZ,   ///< 5 Hz
-} mpu6050_bandwidth_t;
-
-// Periodic Measurement Options
-typedef enum 
-{
-	MPU6050_CYCLE_1_25_HZ, //< 1.25 Hz
-	MPU6050_CYCLE_5_HZ,    //< 5 Hz
-	MPU6050_CYCLE_20_HZ,   //< 20 Hz
-	MPU6050_CYCLE_40_HZ,   //< 40 Hz
-} mpu6050_cycle_rate_t;
 
 std::uint16_t merge_bytes(std::uint8_t LSB, std::uint8_t MSB) 
 {
@@ -323,7 +260,7 @@ std::int16_t two_complement_to_int(std::uint8_t LSB, std::uint8_t MSB)
 
 	word = merge_bytes(LSB, MSB);
 
-	if((word & 0x8000) == 0x8000) { // negative number
+	if((word & 0x8000) == 0x8000) { 
 		signed_int = static_cast<std::int16_t>(-(~word));
 	} else {
 		signed_int = static_cast<std::int16_t>(word & 0x7fff);
@@ -340,105 +277,115 @@ struct mpu6050_imu : i2c_device<Driver, Block_Mode::i2c_multi_byte>
 	mpu6050_imu(const int adapter)
 		: i2c_device<Driver, Block_Mode::i2c_multi_byte>{adapter, mpu6050_imu_address}
 	{
-		this->write_byte(MPU6050_SMPLRT_DIV, 0x07);
-		this->write_byte(MPU6050_CONFIG, 0x00);
-		this->write_byte(MPU6050_PWR_MGMT_1, 0b00000010);
-		this->write_byte(MPU6050_PWR_MGMT_2, 0x00);	
+		this->write_byte(MPU6050_PWR_MGMT_1, 0x80); 
+        usleep(100000);
+        
+        this->write_byte(MPU6050_PWR_MGMT_1, 0x00);
+        usleep(100000);
+    
+        this->write_byte(MPU6050_PWR_MGMT_1, 0x01); 
+        usleep(100000);
+
+        this->write_byte(MPU6050_SMPLRT_DIV, 0x00);  
+        usleep(100000);
+
+        this->write_byte(MPU6050_CONFIG, 0x00); 
+        usleep(100000);
+
+        this->write_byte(MPU6050_GYRO_CONFIG, 0b00000); 
+        usleep(100000);
+
+        this->write_byte(MPU6050_ACCEL_CONFIG, 0b00000); 
+        usleep(100000);
+
+        this->write_byte(MPU6050_INT_PIN_CONFIG, 0x22); 
+        usleep(100000);	
 	}
 
-	std::array<std::uint8_t, 8> buffer{};
-
-	void sync_buffer()
-	{
-		this->read_block(0, begin(buffer), end(buffer));
-	}
-
-	[[nodiscard]] constexpr std::uint8_t get_bufferd_byte(std::size_t offset) const noexcept
-	{
-		return buffer[offset];
-	}
-
-	float temperature() const
-	{
-		auto hi = this->read_byte(MPU6050_TEMP_OUT);
+	[[nodiscard]] double temperature() const
+    {
+        auto hi = this->read_byte(MPU6050_TEMP_OUT);
 		auto lo = this->read_byte(MPU6050_TEMP_OUT + 1);
+        
+        auto temp_data = two_complement_to_int(hi, lo);
+        return (temp_data/340 + 36.53);
+    }
 
-		auto temp = two_complement_to_int(hi, lo);
-		
-		return  static_cast<float>(temp/340 + 36.53);
+	[[nodiscard]] std::array<double, 3> acceleration() const
+    {
+        std::array<std::uint8_t, 6> buffer{};
+        std::array<double, 3> res = {0.0, 0.0, 0.0};
+        this->read_block(MPU6050_ACCEL_OUT, begin(buffer), end(buffer));        
+
+        for(std::size_t i = 0, j = 0; j  < buffer.size() - 1; i++, j += 2)
+        {
+            res[i] = (two_complement_to_int(buffer[j], buffer[j + 1]) / std::pow(2, 15)) * 2;
+        }
+        return res;
+    }
+
+    [[nodiscard]] std::array<double, 3> angular_velocity() const
+    {
+        std::array<std::uint8_t, 6> buffer{};
+        std::array<double, 3> res = {0.0, 0.0, 0.0};
+        this->read_block(MPU6050_GYRO_OUT, begin(buffer), end(buffer));
+
+        for(std::size_t i = 0, j = 0; j  < buffer.size() - 1 ; i++, j += 2)
+        {
+            res[i] = (two_complement_to_int(buffer[j], buffer[j + 1]) / std::pow(2, 15)) * 250;
+        }
+        return res;
 	}
 
-	float accel_x() const
-	{
-		auto hi = this->read_byte(MPU6050_ACCEL_OUT);
-		auto lo = this->read_byte(MPU6050_ACCEL_OUT + 1);
-		
-		auto x_accel = two_complement_to_int(hi, lo);
-
-		return static_cast<float>(x_accel) / 16384;
-	}
-
-	float accel_y() const
-	{
-		auto hi = this->read_byte(MPU6050_ACCEL_OUT + 2);
-		auto lo = this->read_byte(MPU6050_ACCEL_OUT + 3);
-		
-		auto y_accel = two_complement_to_int(hi, lo);
-
-		return static_cast<float>(y_accel) / 16384;
-	}
-
-	float accel_z() const
-	{
-		auto hi = this->read_byte(MPU6050_ACCEL_OUT + 4);
-		auto lo = this->read_byte(MPU6050_ACCEL_OUT + 5);
-		
-		auto z_accel = two_complement_to_int(hi, lo);
-
-		return static_cast<float>(z_accel) / 16384;
-	}
-
-	float gyro_x() const
-	{
-		auto hi = this->read_byte(MPU6050_GYRO_OUT);
-		auto lo = this->read_byte(MPU6050_GYRO_OUT + 1);
-		
-		auto x_gyro = two_complement_to_int(hi, lo);
-
-		return static_cast<float>(x_gyro) / 131;
-	}
-
-	float gyro_y() const
-	{
-		auto hi = this->read_byte(MPU6050_GYRO_OUT + 2);
-		auto lo = this->read_byte(MPU6050_GYRO_OUT + 3);
-		
-		auto y_gyro = two_complement_to_int(hi, lo);
-
-		return static_cast<float>(y_gyro) / 131;
-	}
-
-	float gyro_z() const
-	{
-		auto hi = this->read_byte(MPU6050_GYRO_OUT + 4);
-		auto lo = this->read_byte(MPU6050_GYRO_OUT + 5);
-		
-		auto z_gyro = two_complement_to_int(hi, lo);
-
-		return static_cast<float>(z_gyro) / 131;
-	}
 };
 
-int main()
+int main(/*int argc, char** argv*/)
 {
 	spdlog::info("Starting i2c Experiments");
 	spdlog::set_level(spdlog::level::debug);
+
+	int len = 8, flags = IREQ_CACHE_FLUSH, max_rsp = 255;
+	char addr[19] = {0}, name[248] = {0};
+
+	int dev_id = hci_get_route(NULL);
+	int sock = hci_open_dev(dev_id);
+
+	if (dev_id < 0 || sock < 0)
+	{
+		spdlog::error("opening socket");
+		exit(1);
+	}
+
+	inquiry_info *ii = new inquiry_info;
+
+	int num_rsp = hci_inquiry(dev_id, len, max_rsp, NULL, &ii, flags);
+	if(num_rsp < 0)
+	{
+		spdlog::error("hci_inquiry");
+	}
+
+	for(int i = 0; i < num_rsp; i++)
+	{
+		ba2str(&(ii+i)->bdaddr, addr);
+		memset(name, 0, sizeof(name));
+		if (hci_read_remote_name(sock, &(ii+i)->bdaddr, sizeof(name), name, 0) < 0)
+		{
+			strcpy(name, "[unknown]");
+		}
+		
+		spdlog::info("Address: {} Name: {}", addr, name);
+	}
+
+	delete ii;
+	close(sock);
+	/*
 	mpu6050_imu<Linux_i2c> imu(1);
 	
-	while(true)
+	while (true) 
 	{
-		spdlog::info("Gx : {}°s, Gy : {}°s, Gz : {}°s, Ax : {}g, Ay : {}g, Az : {}g", imu.gyro_x(), imu.gyro_y(), imu.gyro_z(), imu.accel_x(), imu.accel_y(), imu.accel_z());
-
-		usleep(1000000);
-	}
+		auto accel = imu.acceleration();
+		spdlog::info("Acceleration : ax :{0:.3f} g, ay :{0:.3f} g, az :{0:.3f} g", accel[0], accel[1], accel[2]);
+		usleep(100000);
+    }
+	*/
 }

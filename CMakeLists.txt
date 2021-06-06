@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(i2c_experiment CXX)
+project(Experiment CXX)
 include(cmake/StandardProjectSettings.cmake)
 include(cmake/PreventInSourceBuilds.cmake)
 
@@ -53,6 +53,11 @@ if(ENABLE_PCH)
     <utility>)
 endif()
 
-add_subdirectory(3rdparty/spdlog)
+# Set up some extra Conan dependencies based on our needs before loading Conan
+set(CONAN_EXTRA_REQUIRES "")
+set(CONAN_EXTRA_OPTIONS "")
+
+include(cmake/Conan.cmake)
+run_conan()
 
 add_subdirectory(src)

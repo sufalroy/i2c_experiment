@@ -1,7 +1,2 @@
 add_executable(i2c_experiment main.cpp)
-target_link_libraries(
-  i2c_experiment
-  PRIVATE i2c 
-  	project_options
-    project_warnings
-	spdlog::spdlog)
+target_link_libraries(i2c_experiment PRIVATE i2c bluetooth project_options project_warnings CONAN_PKG::spdlog)
