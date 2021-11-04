@@ -21,6 +21,10 @@ add_library(project_warnings INTERFACE)
 # enable cache system
 include(cmake/Cache.cmake)
 
+# Add linker configuration
+include(cmake/Linker.cmake)
+configure_linker(project_options)
+
 # standard compiler warnings
 include(cmake/CompilerWarnings.cmake)
 set_project_warnings(project_warnings)
@@ -53,11 +57,11 @@ if(ENABLE_PCH)
     <utility>)
 endif()
 
-# Set up some extra Conan dependencies based on our needs before loading Conan
-set(CONAN_EXTRA_REQUIRES "")
-set(CONAN_EXTRA_OPTIONS "")
 
-include(cmake/Conan.cmake)
-run_conan()
+option(ENABLE_CONAN "Use Conan for dependency management" ON)
+if(ENABLE_CONAN)
+  include(cmake/Conan.cmake)
+  run_conan()
+endif()
 
 add_subdirectory(src)

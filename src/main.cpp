@@ -8,6 +8,7 @@
 
 extern "C" {
 #include <i2c/smbus.h>
+
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
@@ -227,7 +228,7 @@ struct i2c_device
 };
 
 constexpr auto MPU6050_I2C_ADDRESS_AD0 = 0x68; // MPU6050 default i2c address w/ AD0 low
-
+    
 constexpr auto MPU6050_SELF_TEST_X = 0x0D;  // Self test factory calibrated values register
 constexpr auto MPU6050_SELF_TEST_Y = 0x0E;  // Self test factory calibrated values register
 constexpr auto MPU6050_SELF_TEST_Z = 0x0F;  // Self test factory calibrated values register
@@ -238,7 +239,7 @@ constexpr auto MPU6050_CONFIG         = 0x1A; // General config register
 constexpr auto MPU6050_GYRO_CONFIG    = 0x1B; // Gyroscope specific config register
 constexpr auto MPU6050_ACCEL_CONFIG   = 0x1C; // Accelerometer specific config register
 constexpr auto MPU6050_INT_PIN_CONFIG = 0x37; // Interrupt pin configuration register
-constexpr auto MPU6050_ACCEL_OUT      = 0x3B; // Base address for accelaration data reads
+constexpr auto MPU6050_ACCEL_OUT      = 0x3B; // Base address for accelerometer data reads
 constexpr auto MPU6050_TEMP_OUT       = 0x41; // Temperature data high byte register
 constexpr auto MPU6050_GYRO_OUT       = 0x43; // Base address for gyro data reads
 constexpr auto MPU6050_SIG_PATH_RESET = 0x68; // Register to reset sensor signal paths
@@ -248,7 +249,7 @@ constexpr auto MPU6050_PWR_MGMT_2     = 0x6C; // Secondary power/sleep control r
 constexpr auto MPU6050_WHO_AM_I       = 0x75; // Divice ID register
 
 
-std::uint16_t merge_bytes(std::uint8_t LSB, std::uint8_t MSB) 
+static std::uint16_t merge_bytes(std::uint8_t LSB, std::uint8_t MSB) 
 {
 	return static_cast<std::uint16_t>((( LSB & 0xFF) << 8) | MSB);
 }
@@ -256,9 +257,7 @@ std::uint16_t merge_bytes(std::uint8_t LSB, std::uint8_t MSB)
 std::int16_t two_complement_to_int(std::uint8_t LSB, std::uint8_t MSB) 
 {	
 	std::int16_t signed_int = 0;
-	std::uint16_t word;
-
-	word = merge_bytes(LSB, MSB);
+	std::uint16_t word = merge_bytes(LSB, MSB);
 
 	if((word & 0x8000) == 0x8000) { 
 		signed_int = static_cast<std::int16_t>(-(~word));
@@ -277,7 +276,7 @@ struct mpu6050_imu : i2c_device<Driver, Block_Mode::i2c_multi_byte>
 	mpu6050_imu(const int adapter)
 		: i2c_device<Driver, Block_Mode::i2c_multi_byte>{adapter, mpu6050_imu_address}
 	{
-		this->write_byte(MPU6050_PWR_MGMT_1, 0x80); 
+		 this->write_byte(MPU6050_PWR_MGMT_1, 0x80); 
         usleep(100000);
         
         this->write_byte(MPU6050_PWR_MGMT_1, 0x00);
@@ -300,6 +299,15 @@ struct mpu6050_imu : i2c_device<Driver, Block_Mode::i2c_multi_byte>
 
         this->write_byte(MPU6050_INT_PIN_CONFIG, 0x22); 
         usleep(100000);	
+	}
+
+	void reset()
+	{
+		this->write_byte(MPU6050_PWR_MGMT_1, 0x80);
+        usleep(100000);
+
+        this->write_byte(MPU6050_PWR_MGMT_1, 0x00);
+        usleep(100000);
 	}
 
 	[[nodiscard]] double temperature() const
@@ -341,9 +349,10 @@ struct mpu6050_imu : i2c_device<Driver, Block_Mode::i2c_multi_byte>
 
 int main(/*int argc, char** argv*/)
 {
-	spdlog::info("Starting i2c Experiments");
+	spdlog::info("Starting Experiments");
 	spdlog::set_level(spdlog::level::debug);
 
+	/*
 	int len = 8, flags = IREQ_CACHE_FLUSH, max_rsp = 255;
 	char addr[19] = {0}, name[248] = {0};
 
@@ -378,14 +387,16 @@ int main(/*int argc, char** argv*/)
 
 	delete ii;
 	close(sock);
-	/*
+	*/
+
 	mpu6050_imu<Linux_i2c> imu(1);
 	
 	while (true) 
 	{
 		auto accel = imu.acceleration();
-		spdlog::info("Acceleration : ax :{0:.3f} g, ay :{0:.3f} g, az :{0:.3f} g", accel[0], accel[1], accel[2]);
+		// auto omega = imu.angular_velocity();
+		spdlog::info("ax = {} g, ay = {} g, az = {} g", accel[0], accel[1], accel[2]);
+		// spdlog::info("wx = {} °/s, wy = {} °/s, wz = {} °/s", omega[0], omega[1], omega[2]);
 		usleep(100000);
     }
-	*/
 }
